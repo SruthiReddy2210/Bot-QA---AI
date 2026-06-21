@@ -1,49 +1,54 @@
 import streamlit as st
 import os
 import chromadb
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 
-load_dotenv()
-
-API_KEY = os.getenv("GEMINI_API_KEY")
+# Load API Key from Streamlit Secrets
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=API_KEY)
 
+# Load embedding model
 embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 
+# ChromaDB
 client = chromadb.PersistentClient(path="db")
-
 collection = client.get_collection("documents")
 
-llm = genai.GenerativeModel("gemini-2.5-flash")
+# Faster Gemini model
+llm = genai.GenerativeModel("gemini-1.5-flash")
 
 st.title("📄 Document Q&A Bot")
+st.write("Ask questions about the uploaded documents.")
 
-question = st.text_input("Ask a question about your documents")
+question = st.text_input("Ask a question")
 
 if st.button("Get Answer"):
 
-    if question:
+    if question.strip():
 
-        query_embedding = embed_model.encode(question).tolist()
+        try:
+            # Create query embedding
+            query_embedding = embed_model.encode(question).tolist()
 
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=3
-        )
+            # Retrieve only top result
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=1
+            )
 
-        context = ""
+            # Limit context size
+            context = ""
 
-        for doc in results["documents"][0]:
-            context += doc + "\n\n"
+            for doc in results["documents"][0]:
+                context += doc[:500] + "\n\n"
 
-        prompt = f"""
-Use ONLY the context below.
+            prompt = f"""
+Answer ONLY from the provided context.
 
-If answer is not present say:
-'I cannot find the answer in the documents.'
+If the answer is not present, reply:
+"I cannot find the answer in the documents."
 
 Context:
 {context}
@@ -52,14 +57,20 @@ Question:
 {question}
 """
 
-        response = llm.generate_content(prompt)
+            response = llm.generate_content(prompt)
 
-        st.subheader("Answer")
-        st.write(response.text)
+            st.subheader("Answer")
+            st.write(response.text)
 
-        st.subheader("Citations")
+            st.subheader("Citations")
 
-        for meta in results["metadatas"][0]:
-            st.write(
-                f"{meta['source']} - Page {meta['page']}"
-            )
+            for meta in results["metadatas"][0]:
+                st.write(
+                    f"📄 {meta['source']} | Page {meta['page']}"
+                )
+
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    else:
+        st.warning("Please enter a question.")
