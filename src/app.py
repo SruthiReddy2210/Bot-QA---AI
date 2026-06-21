@@ -17,7 +17,7 @@ client = chromadb.PersistentClient(path="db")
 collection = client.get_collection("documents")
 
 # Faster Gemini model
-llm = genai.GenerativeModel("gemini-1.5-flash")
+llm = genai.GenerativeModel("gemini-pro")
 
 st.title("📄 Document Q&A Bot")
 st.write("Ask questions about the uploaded documents.")
